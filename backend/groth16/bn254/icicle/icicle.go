@@ -542,8 +542,6 @@ func computeH(a, b, c []fr.Element, pk *ProvingKey, log zerolog.Logger) icicle_c
 	icicle_vecops.VecOp(aDevice, cDevice, aDevice, vecCfg, icicle_core.Sub)
 	icicle_vecops.VecOp(aDevice, pk.DenDevice, aDevice, vecCfg, icicle_core.Mul)
 	log.Debug().Dur("took", time.Since(start)).Msg("computeH: vecOps")
-	defer bDevice.Free()
-	defer cDevice.Free()
 
 	cfg := icicle_ntt.GetDefaultNttConfig()
 	cfg.CosetGen = pk.CosetGenerator
@@ -551,6 +549,7 @@ func computeH(a, b, c []fr.Element, pk *ProvingKey, log zerolog.Logger) icicle_c
 	start = time.Now()
 	icicle_ntt.Ntt(aDevice, icicle_core.KInverse, &cfg, aDevice)
 	log.Debug().Dur("took", time.Since(start)).Msg("computeH: INTT final")
-
+	bDevice.Free()
+	cDevice.Free()
 	return aDevice
 }

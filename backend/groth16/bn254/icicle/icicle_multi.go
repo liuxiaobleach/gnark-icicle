@@ -229,8 +229,8 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 
 	// we need to copy and filter the wireValues for each multi exp
 	// as pk.G1.A, pk.G1.B and pk.G2.B may have (a significant) number of point at infinity
-	var wireValuesADevice, wireValuesBDevice icicle_core.DeviceSlice
-	chWireValuesA, chWireValuesB := make(chan struct{}, 1), make(chan struct{}, 1)
+	var wireValuesADevice, wireValuesBDevice, wireValuesBDeviceForG2 icicle_core.DeviceSlice
+	chWireValuesA, chWireValuesB, chWireValuesBForG2 := make(chan struct{}, 1), make(chan struct{}, 1), make(chan struct{}, 1)
 
 	icicle_cr.RunOnDevice(device1, func(args ...any) {
 		wireValuesA := make([]fr.Element, len(wireValues)-int(pk.NbInfinityA))
@@ -263,6 +263,23 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 		wireValuesBHost.CopyToDevice(&wireValuesBDevice, true)
 
 		close(chWireValuesB)
+	})
+
+	icicle_cr.RunOnDevice(device0, func(args ...any) {
+		wireValuesB := make([]fr.Element, len(wireValues)-int(pk.NbInfinityB))
+		for i, j := 0, 0; j < len(wireValuesB); i++ {
+			if pk.InfinityB[i] {
+				continue
+			}
+			wireValuesB[j] = wireValues[i]
+			j++
+		}
+
+		// Copy scalars to the device and retain ptr to them
+		wireValuesBHost := (icicle_core.HostSlice[fr.Element])(wireValuesB)
+		wireValuesBHost.CopyToDevice(&wireValuesBDeviceForG2, true)
+
+		close(chWireValuesBForG2)
 	})
 
 	// sample random r and s
@@ -424,10 +441,21 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	freeBDone := make(chan error, 1)
 	icicle_cr.RunOnDevice(device0, func(args ...any) {
 		wireValuesBDevice.Free()
-		h.Free()
 		freeBDone <- nil
+	})
+	freeBForG2Done := make(chan error, 1)
+	icicle_cr.RunOnDevice(device0, func(args ...any) {
+		wireValuesBDeviceForG2.Free()
+		freeBForG2Done <- nil
+	})
+	freeHDone := make(chan error, 1)
+	icicle_cr.RunOnDevice(device0, func(args ...any) {
+		h.Free()
+		freeHDone <- nil
 	})
 	<-freeADone
 	<-freeBDone
+	<-freeBForG2Done
+	<-freeHDone
 	return proof, nil
 }

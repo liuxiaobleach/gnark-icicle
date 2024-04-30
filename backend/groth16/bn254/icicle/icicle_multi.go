@@ -109,7 +109,7 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 	})
 	/*************************     K      ***************************/
 	copyKDone := make(chan bool, 1)
-	icicle_cr.RunOnDevice(device0, func(args ...any) {
+	icicle_cr.RunOnDevice(device4, func(args ...any) {
 		g1KHost := (icicle_core.HostSlice[curve.G1Affine])(pk.G1.K)
 		g1KHost.CopyToDevice(&pk.G1Device.K, true)
 		copyKDone <- true
@@ -340,8 +340,8 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 		return nil
 	}
 
-	computeKRS := func() error {
-		var krs, krs2, p1 curve.G1Jac
+	/*computeKRS := func() error {
+		var krs, p1 curve.G1Jac
 		sizeH := int(pk.Domain.Cardinality - 1)
 
 		cfg := icicle_msm.GetDefaultMSMConfig()
@@ -376,6 +376,42 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 		krs.AddAssign(&p1)
 
 		proof.Krs.FromJacobian(&krs)
+
+		return nil
+	}*/
+
+	var krs, p1 curve.G1Jac
+	computeKrs := func() error {
+		cfg := icicle_msm.GetDefaultMSMConfig()
+		cfg.ArePointsMontgomeryForm = true
+		cfg.AreScalarsMontgomeryForm = true
+		// filter the wire values if needed
+		// TODO Perf @Tabaie worst memory allocation offender
+		toRemove := commitmentInfo.GetPrivateCommitted()
+		toRemove = append(toRemove, commitmentInfo.CommitmentIndexes())
+		_wireValues := filterHeap(wireValues[r1cs.GetNbPublicVariables():], r1cs.GetNbPublicVariables(), internal.ConcatAll(toRemove...))
+		_wireValuesHost := (icicle_core.HostSlice[fr.Element])(_wireValues)
+		resKrs := make(icicle_core.HostSlice[icicle_bn254.Projective], 1)
+		start := time.Now()
+		icicle_msm.Msm(_wireValuesHost, pk.G1Device.K, &cfg, resKrs)
+		log.Debug().Dur("took", time.Since(start)).Msg("MSM Krs")
+		krs = g1ProjectiveToG1Jac(resKrs[0])
+		return nil
+	}
+
+	var krs2 curve.G1Jac
+	computeKrs2 := func() error {
+		// TODO wait h done
+		sizeH := int(pk.Domain.Cardinality - 1)
+
+		cfg := icicle_msm.GetDefaultMSMConfig()
+		cfg.ArePointsMontgomeryForm = true
+		cfg.AreScalarsMontgomeryForm = true
+		resKrs2 := make(icicle_core.HostSlice[icicle_bn254.Projective], 1)
+		start := time.Now()
+		icicle_msm.Msm(h.RangeTo(sizeH, false), pk.G1Device.Z, &cfg, resKrs2)
+		log.Debug().Dur("took", time.Since(start)).Msg("MSM Krs2")
+		krs2 = g1ProjectiveToG1Jac(resKrs2[0])
 
 		return nil
 	}
@@ -420,11 +456,35 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	})
 	<-BS1Done
 
-	KRSDone := make(chan error, 1)
+	/*KRSDone := make(chan error, 1)
 	icicle_cr.RunOnDevice(device0, func(args ...any) {
 		KRSDone <- computeKRS()
 	})
-	<-KRSDone
+	<-KRSDone*/
+
+	KrsDone := make(chan error, 1)
+	icicle_cr.RunOnDevice(device4, func(args ...any) {
+		KrsDone <- computeKrs()
+	})
+	<-KrsDone
+
+	Krs2Done := make(chan error, 1)
+	icicle_cr.RunOnDevice(device0, func(args ...any) {
+		Krs2Done <- computeKrs2()
+	})
+	<-Krs2Done
+
+	krs.AddMixed(&deltas[2])
+
+	krs.AddAssign(&krs2)
+
+	p1.ScalarMultiplication(&ar, &s)
+	krs.AddAssign(&p1)
+
+	p1.ScalarMultiplication(&bs1, &r)
+	krs.AddAssign(&p1)
+
+	proof.Krs.FromJacobian(&krs)
 
 	BS2Done := make(chan error, 1)
 	icicle_cr.RunOnDevice(device2, func(args ...any) {

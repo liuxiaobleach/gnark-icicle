@@ -89,25 +89,25 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 	})
 	/*************************     B      ***************************/
 	copyBDone := make(chan bool, 1)
-	go func() {
+	icicle_cr.RunOnDevice(0, func(args ...any) {
 		g1BHost := (icicle_core.HostSlice[curve.G1Affine])(pk.G1.B)
 		g1BHost.CopyToDevice(&pk.G1Device.B, true)
 		copyBDone <- true
-	}()
+	})
 	/*************************     K      ***************************/
 	copyKDone := make(chan bool, 1)
-	go func() {
+	icicle_cr.RunOnDevice(0, func(args ...any) {
 		g1KHost := (icicle_core.HostSlice[curve.G1Affine])(pk.G1.K)
 		g1KHost.CopyToDevice(&pk.G1Device.K, true)
 		copyKDone <- true
-	}()
+	})
 	/*************************     Z      ***************************/
 	copyZDone := make(chan bool, 1)
-	go func() {
+	icicle_cr.RunOnDevice(0, func(args ...any) {
 		g1ZHost := (icicle_core.HostSlice[curve.G1Affine])(pk.G1.Z)
 		g1ZHost.CopyToDevice(&pk.G1Device.Z, true)
 		copyZDone <- true
-	}()
+	})
 	/*************************  End G1 Device Setup  ***************************/
 	<-copyDenDone
 	<-copyADone
@@ -116,11 +116,11 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 	<-copyZDone
 	/*************************  Start G2 Device Setup  ***************************/
 	copyG2BDone := make(chan bool, 1)
-	go func() {
+	icicle_cr.RunOnDevice(0, func(args ...any) {
 		g2BHost := (icicle_core.HostSlice[curve.G2Affine])(pk.G2.B)
 		g2BHost.CopyToDevice(&pk.G2Device.B, true)
 		copyG2BDone <- true
-	}()
+	})
 
 	<-copyG2BDone
 	/*************************  End G2 Device Setup  ***************************/

@@ -413,8 +413,9 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	})
 	icicle_cr.RunOnDevice(0, func(args ...any) {
 		wireValuesBDevice.Free()
-		// h.Free()
+		h.Free()
 	})
 
+	time.Sleep(1 * time.Since())
 	return proof, nil
 }

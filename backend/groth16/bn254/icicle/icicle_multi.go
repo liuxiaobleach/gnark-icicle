@@ -82,11 +82,11 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 	/*************************  Start G1 Device Setup  ***************************/
 	/*************************     A      ***************************/
 	copyADone := make(chan bool, 1)
-	go func() {
+	icicle_cr.RunOnDevice(0, func(args ...any) {
 		g1AHost := (icicle_core.HostSlice[curve.G1Affine])(pk.G1.A)
 		g1AHost.CopyToDevice(&pk.G1Device.A, true)
 		copyADone <- true
-	}()
+	})
 	/*************************     B      ***************************/
 	copyBDone := make(chan bool, 1)
 	go func() {
@@ -129,6 +129,8 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 
 // Prove generates the proof of knowledge of a r1cs with full witness (secret + public part).
 func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...backend.ProverOption) (*groth16_bn254.Proof, error) {
+	log := logger.Logger().With().Str("curve", r1cs.CurveID().String()).Str("acceleration", "icicle").Int("nbConstraints", r1cs.GetNbConstraints()).Str("backend", "groth16").Logger()
+	log.Debug().Msg("start ProveOnMulti")
 	opt, err := backend.NewProverConfig(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("new prover config: %w", err)
@@ -136,12 +138,8 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	if opt.HashToFieldFn == nil {
 		opt.HashToFieldFn = hash_to_field.New([]byte(constraint.CommitmentDst))
 	}
-	if opt.Accelerator != "icicle" {
-		return groth16_bn254.Prove(r1cs, &pk.ProvingKey, fullWitness, opts...)
-	}
-	log := logger.Logger().With().Str("curve", r1cs.CurveID().String()).Str("acceleration", "icicle").Int("nbConstraints", r1cs.GetNbConstraints()).Str("backend", "groth16").Logger()
 	if pk.deviceInfo == nil {
-		log.Debug().Msg("precomputing proving key in GPU")
+		log.Debug().Msg("precomputing proving key on multi GPU")
 		if err := pk.setupDevicePointersOnMulti(); err != nil {
 			return nil, fmt.Errorf("setup device pointers: %w", err)
 		}
@@ -378,9 +376,12 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	<-chHDone
 
 	// schedule our proof part computations
-	if err := computeAR1(); err != nil {
-		return nil, err
-	}
+	arDone := make(chan error, 1)
+	icicle_cr.RunOnDevice(0, func(args ...any) {
+		arDone <- computeAR1()
+	})
+	<-arDone
+
 	if err := computeBS1(); err != nil {
 		return nil, err
 	}

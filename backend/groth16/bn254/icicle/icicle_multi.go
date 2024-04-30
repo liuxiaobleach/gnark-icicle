@@ -142,7 +142,7 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	log := logger.Logger().With().Str("curve", r1cs.CurveID().String()).Str("acceleration", "icicle").Int("nbConstraints", r1cs.GetNbConstraints()).Str("backend", "groth16").Logger()
 	if pk.deviceInfo == nil {
 		log.Debug().Msg("precomputing proving key in GPU")
-		if err := pk.setupDevicePointers(); err != nil {
+		if err := pk.setupDevicePointersOnMulti(); err != nil {
 			return nil, fmt.Errorf("setup device pointers: %w", err)
 		}
 	}

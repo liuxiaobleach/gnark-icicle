@@ -219,7 +219,7 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	var wireValuesADevice, wireValuesBDevice icicle_core.DeviceSlice
 	chWireValuesA, chWireValuesB := make(chan struct{}, 1), make(chan struct{}, 1)
 
-	go func() {
+	icicle_cr.RunOnDevice(1, func(args ...any) {
 		wireValuesA := make([]fr.Element, len(wireValues)-int(pk.NbInfinityA))
 		for i, j := 0, 0; j < len(wireValuesA); i++ {
 			if pk.InfinityA[i] {
@@ -234,7 +234,7 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 		wireValuesAHost.CopyToDevice(&wireValuesADevice, true)
 
 		close(chWireValuesA)
-	}()
+	})
 	go func() {
 		wireValuesB := make([]fr.Element, len(wireValues)-int(pk.NbInfinityB))
 		for i, j := 0, 0; j < len(wireValuesB); i++ {

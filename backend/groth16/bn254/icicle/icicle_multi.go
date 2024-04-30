@@ -388,12 +388,17 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	})
 	<-BS1Done
 
-	if err := computeKRS(); err != nil {
-		return nil, err
-	}
-	if err := computeBS2(); err != nil {
-		return nil, err
-	}
+	KRSDone := make(chan error, 1)
+	icicle_cr.RunOnDevice(0, func(args ...any) {
+		KRSDone <- computeKRS()
+	})
+	<-KRSDone
+
+	BS2Done := make(chan error, 1)
+	icicle_cr.RunOnDevice(0, func(args ...any) {
+		BS2Done <- computeBS2()
+	})
+	<-BS2Done
 
 	log.Debug().Dur("took", time.Since(start)).Msg("prover done")
 

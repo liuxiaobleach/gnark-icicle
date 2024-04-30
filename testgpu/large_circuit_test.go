@@ -1,7 +1,8 @@
 package testgpu
 
 import (
-	"github.com/consensys/gnark/backend"
+	icicle_bn254 "github.com/consensys/gnark/backend/groth16/bn254/icicle"
+	cs "github.com/consensys/gnark/constraint/bn254"
 	"os"
 	"testing"
 
@@ -50,7 +51,7 @@ func TestLargeCircuitInGpuOnBn254(t *testing.T) {
 	assert.NoError(err)
 
 	for i := 0; i < 10; i++ {
-		innerProof, err := groth16.Prove(innerCcs, innerPK, innerWitness, backend.WithIcicleAcceleration())
+		innerProof, err := icicle_bn254.Prove(innerCcs.(*cs.R1CS), innerPK.(*icicle_bn254.ProvingKey), innerWitness)
 		assert.NoError(err)
 		err = groth16.Verify(innerProof, innerVK, innerPubWitness)
 		assert.NoError(err)

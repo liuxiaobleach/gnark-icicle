@@ -32,7 +32,7 @@ import (
 
 const (
 	device0 = 0
-	device1 = 1
+	device1 = 0
 	device2 = 2
 	device3 = 3
 	device4 = 4

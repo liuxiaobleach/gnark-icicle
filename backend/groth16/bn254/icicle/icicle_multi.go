@@ -54,7 +54,6 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 	}
 
 	copyDenDone := make(chan bool, 1)
-
 	icicle_cr.RunOnDevice(0, func(args ...any) {
 		denIcicleArrHost := (icicle_core.HostSlice[fr.Element])(denIcicleArr)
 		denIcicleArrHost.CopyToDevice(&pk.DenDevice, true)
@@ -63,20 +62,24 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 	})
 
 	/*************************  Init Domain Device  ***************************/
-	ctx, err := icicle_cr.GetDefaultDeviceContext()
-	if err != icicle_cr.CudaSuccess {
-		panic("Couldn't create device context") // TODO
-	}
+	initNttDone := make(chan bool, 1)
+	icicle_cr.RunOnDevice(0, func(args ...any) {
+		ctx, err := icicle_cr.GetDefaultDeviceContext()
+		if err != icicle_cr.CudaSuccess {
+			panic("Couldn't create device context") // TODO
+		}
 
-	genBits := gen.Bits()
-	limbs := icicle_core.ConvertUint64ArrToUint32Arr(genBits[:])
-	copy(pk.CosetGenerator[:], limbs[:fr.Limbs*2])
-	var rouIcicle icicle_bn254.ScalarField
-	rouIcicle.FromLimbs(limbs)
-	e := icicle_ntt.InitDomain(rouIcicle, ctx, false)
-	if e.IcicleErrorCode != icicle_core.IcicleSuccess {
-		panic("Couldn't initialize domain") // TODO
-	}
+		genBits := gen.Bits()
+		limbs := icicle_core.ConvertUint64ArrToUint32Arr(genBits[:])
+		copy(pk.CosetGenerator[:], limbs[:fr.Limbs*2])
+		var rouIcicle icicle_bn254.ScalarField
+		rouIcicle.FromLimbs(limbs)
+		e := icicle_ntt.InitDomain(rouIcicle, ctx, false)
+		if e.IcicleErrorCode != icicle_core.IcicleSuccess {
+			panic("Couldn't initialize domain") // TODO
+		}
+		initNttDone <- true
+	})
 
 	/*************************  End Init Domain Device  ***************************/
 	/*************************  Start G1 Device Setup  ***************************/
@@ -114,6 +117,8 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 	<-copyBDone
 	<-copyKDone
 	<-copyZDone
+
+	<-initNttDone
 	/*************************  Start G2 Device Setup  ***************************/
 	copyG2BDone := make(chan bool, 1)
 	icicle_cr.RunOnDevice(0, func(args ...any) {

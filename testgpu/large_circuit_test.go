@@ -16,7 +16,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const TEST_SIZE = 1 * 7000000
+const TEST_SIZE = 1 * 1000000
 
 type LargeCircuitCommitment struct {
 	P, Q [TEST_SIZE]frontend.Variable

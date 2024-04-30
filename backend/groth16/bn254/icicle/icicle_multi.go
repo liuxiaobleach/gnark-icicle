@@ -4,8 +4,6 @@ package icicle
 
 import (
 	"fmt"
-	icicle_vecops "github.com/ingonyama-zk/icicle/v2/wrappers/golang/curves/bn254/vecOps"
-	"github.com/rs/zerolog"
 	"math/big"
 	"math/bits"
 	"time"
@@ -30,6 +28,8 @@ import (
 	icicle_g2 "github.com/ingonyama-zk/icicle/v2/wrappers/golang/curves/bn254/g2"
 	icicle_msm "github.com/ingonyama-zk/icicle/v2/wrappers/golang/curves/bn254/msm"
 	icicle_ntt "github.com/ingonyama-zk/icicle/v2/wrappers/golang/curves/bn254/ntt"
+	icicle_vecops "github.com/ingonyama-zk/icicle/v2/wrappers/golang/curves/bn254/vecOps"
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -131,7 +131,7 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 	<-initNttDone
 	/*************************  Start G2 Device Setup  ***************************/
 	copyG2BDone := make(chan bool, 1)
-	icicle_cr.RunOnDevice(device0, func(args ...any) {
+	icicle_cr.RunOnDevice(device2, func(args ...any) {
 		g2BHost := (icicle_core.HostSlice[curve.G2Affine])(pk.G2.B)
 		g2BHost.CopyToDevice(&pk.G2Device.B, true)
 		copyG2BDone <- true
@@ -267,7 +267,7 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 		close(chWireValuesB)
 	})
 
-	icicle_cr.RunOnDevice(device0, func(args ...any) {
+	icicle_cr.RunOnDevice(device2, func(args ...any) {
 		wireValuesB := make([]fr.Element, len(wireValues)-int(pk.NbInfinityB))
 		for i, j := 0, 0; j < len(wireValuesB); i++ {
 			if pk.InfinityB[i] {
@@ -384,14 +384,14 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 		// Bs2 (1 multi exp G2 - size = len(wires))
 		var Bs, deltaS curve.G2Jac
 
-		<-chWireValuesB
+		<-chWireValuesBForG2
 
 		cfg := icicle_g2.G2GetDefaultMSMConfig()
 		cfg.ArePointsMontgomeryForm = true
 		cfg.AreScalarsMontgomeryForm = true
 		res := make(icicle_core.HostSlice[icicle_g2.G2Projective], 1)
 		start := time.Now()
-		icicle_g2.G2Msm(wireValuesBDevice, pk.G2Device.B, &cfg, res)
+		icicle_g2.G2Msm(wireValuesBDeviceForG2, pk.G2Device.B, &cfg, res)
 		log.Debug().Dur("took", time.Since(start)).Msg("MSM Bs2 G2")
 		Bs = g2ProjectiveToG2Jac(&res[0])
 
@@ -427,7 +427,7 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	<-KRSDone
 
 	BS2Done := make(chan error, 1)
-	icicle_cr.RunOnDevice(device0, func(args ...any) {
+	icicle_cr.RunOnDevice(device2, func(args ...any) {
 		BS2Done <- computeBS2()
 	})
 	<-BS2Done

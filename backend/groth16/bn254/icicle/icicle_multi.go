@@ -235,7 +235,7 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 
 		close(chWireValuesA)
 	})
-	go func() {
+	icicle_cr.RunOnDevice(0, func(args ...any) {
 		wireValuesB := make([]fr.Element, len(wireValues)-int(pk.NbInfinityB))
 		for i, j := 0, 0; j < len(wireValuesB); i++ {
 			if pk.InfinityB[i] {
@@ -250,7 +250,7 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 		wireValuesBHost.CopyToDevice(&wireValuesBDevice, true)
 
 		close(chWireValuesB)
-	}()
+	})
 
 	// sample random r and s
 	var r, s big.Int
@@ -382,9 +382,12 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	})
 	<-arDone
 
-	if err := computeBS1(); err != nil {
-		return nil, err
-	}
+	BS1Done := make(chan error, 1)
+	icicle_cr.RunOnDevice(0, func(args ...any) {
+		BS1Done <- computeBS1()
+	})
+	<-BS1Done
+
 	if err := computeKRS(); err != nil {
 		return nil, err
 	}

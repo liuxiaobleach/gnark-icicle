@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	device0 = 0
+	device0 = 0 // for ntt
 	device1 = 1
 	device2 = 2
 	device3 = 3
@@ -102,7 +102,7 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 	})
 	/*************************     B      ***************************/
 	copyBDone := make(chan bool, 1)
-	icicle_cr.RunOnDevice(device0, func(args ...any) {
+	icicle_cr.RunOnDevice(device3, func(args ...any) {
 		g1BHost := (icicle_core.HostSlice[curve.G1Affine])(pk.G1.B)
 		g1BHost.CopyToDevice(&pk.G1Device.B, true)
 		copyBDone <- true
@@ -250,7 +250,7 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 
 		close(chWireValuesA)
 	})
-	icicle_cr.RunOnDevice(device0, func(args ...any) {
+	icicle_cr.RunOnDevice(device3, func(args ...any) {
 		wireValuesB := make([]fr.Element, len(wireValues)-int(pk.NbInfinityB))
 		for i, j := 0, 0; j < len(wireValuesB); i++ {
 			if pk.InfinityB[i] {
@@ -415,7 +415,7 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	<-arDone
 
 	BS1Done := make(chan error, 1)
-	icicle_cr.RunOnDevice(device0, func(args ...any) {
+	icicle_cr.RunOnDevice(device3, func(args ...any) {
 		BS1Done <- computeBS1()
 	})
 	<-BS1Done
@@ -441,7 +441,7 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 		freeADone <- nil
 	})
 	freeBDone := make(chan error, 1)
-	icicle_cr.RunOnDevice(device0, func(args ...any) {
+	icicle_cr.RunOnDevice(device3, func(args ...any) {
 		wireValuesBDevice.Free()
 		freeBDone <- nil
 	})

@@ -50,7 +50,7 @@ func (pk *ProvingKey) setupDevicePointers() error {
 	oneI.SetOne()
 	denI.Exp(gen, big.NewInt(int64(pk.Domain.Cardinality)))
 	denI.Sub(&denI, &oneI).Inverse(&denI)
-	
+
 	log2SizeFloor := bits.Len(uint(n)) - 1
 	denIcicleArr := []fr.Element{denI}
 	for i := 0; i < log2SizeFloor; i++ {
@@ -60,15 +60,15 @@ func (pk *ProvingKey) setupDevicePointers() error {
 	for i := 0; i < pow2Remainder; i++ {
 		denIcicleArr = append(denIcicleArr, denI)
 	}
-	
+
 	copyDenDone := make(chan bool, 1)
 	go func() {
 		denIcicleArrHost := (icicle_core.HostSlice[fr.Element])(denIcicleArr)
 		denIcicleArrHost.CopyToDevice(&pk.DenDevice, true)
 		icicle_bn254.FromMontgomery(&pk.DenDevice)
 		copyDenDone <- true
-		}()
-		
+	}()
+
 	/*************************  Init Domain Device  ***************************/
 	ctx, err := icicle_cr.GetDefaultDeviceContext()
 	if err != icicle_cr.CudaSuccess {
@@ -80,7 +80,7 @@ func (pk *ProvingKey) setupDevicePointers() error {
 	copy(pk.CosetGenerator[:], limbs[:fr.Limbs*2])
 	var rouIcicle icicle_bn254.ScalarField
 	rouIcicle.FromLimbs(limbs)
-	e := icicle_ntt.InitDomain(rouIcicle, ctx, true)
+	e := icicle_ntt.InitDomain(rouIcicle, ctx, false)
 	if e.IcicleErrorCode != icicle_core.IcicleSuccess {
 		panic("Couldn't initialize domain") // TODO
 	}
@@ -213,7 +213,7 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 
 	privateCommittedValues := make([][]fr.Element, len(commitmentInfo))
 
-		// override hints
+	// override hints
 	bsb22ID := solver.GetHintID(fcs.Bsb22CommitmentComputePlaceholder)
 	solverOpts = append(solverOpts, solver.OverrideHint(bsb22ID, func(_ *big.Int, in []*big.Int, out []*big.Int) error {
 		i := int(in[0].Int64())
@@ -514,20 +514,19 @@ func computeH(a, b, c []fr.Element, pk *ProvingKey, log zerolog.Logger) icicle_c
 		cfg := icicle_ntt.GetDefaultNttConfig()
 		scalarsStream, _ := icicle_cr.CreateStream()
 		cfg.Ctx.Stream = &scalarsStream
-		cfg.Ordering = icicle_core.KNM
+		cfg.Ordering = icicle_core.KNR
 		cfg.IsAsync = true
 		scalarsHost := icicle_core.HostSliceFromElements(scalars)
 		var scalarsDevice icicle_core.DeviceSlice
 		scalarsHost.CopyToDeviceAsync(&scalarsDevice, scalarsStream, true)
 		start := time.Now()
-		cfg.NttAlgorithm = icicle_core.Radix2
 		icicle_ntt.Ntt(scalarsDevice, icicle_core.KInverse, &cfg, scalarsDevice)
-		cfg.Ordering = icicle_core.KMN
+		cfg.Ordering = icicle_core.KRN
 		cfg.CosetGen = pk.CosetGenerator
 		icicle_ntt.Ntt(scalarsDevice, icicle_core.KForward, &cfg, scalarsDevice)
 		icicle_cr.SynchronizeStream(&scalarsStream)
 		log.Debug().Dur("took", time.Since(start)).Msg("computeH: NTT + INTT")
-		channel <-scalarsDevice
+		channel <- scalarsDevice
 	}
 
 	go computeInttNttOnDevice(a, computeADone)
@@ -550,8 +549,7 @@ func computeH(a, b, c []fr.Element, pk *ProvingKey, log zerolog.Logger) icicle_c
 
 	cfg := icicle_ntt.GetDefaultNttConfig()
 	cfg.CosetGen = pk.CosetGenerator
-	cfg.Ordering = icicle_core.KNM
-	cfg.NttAlgorithm = icicle_core.Radix2
+	cfg.Ordering = icicle_core.KNR
 	start = time.Now()
 	icicle_ntt.Ntt(aDevice, icicle_core.KInverse, &cfg, aDevice)
 	log.Debug().Dur("took", time.Since(start)).Msg("computeH: INTT final")

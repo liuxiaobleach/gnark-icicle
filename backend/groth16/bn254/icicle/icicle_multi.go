@@ -206,6 +206,23 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	solution := _solution.(*cs.R1CSSolution)
 	wireValues := []fr.Element(solution.W)
 
+	// sample random r and s
+	var r, s big.Int
+	var _r, _s, _kr fr.Element
+	if _, err := _r.SetRandom(); err != nil {
+		return nil, err
+	}
+	if _, err := _s.SetRandom(); err != nil {
+		return nil, err
+	}
+	_kr.Mul(&_r, &_s).Neg(&_kr)
+
+	_r.BigInt(&r)
+	_s.BigInt(&s)
+
+	// computes r[δ], s[δ], kr[δ]
+	deltas := curve.BatchScalarMultiplicationG1(&pk.G1.Delta, []fr.Element{_r, _s, _kr})
+
 	start := time.Now()
 
 	commitmentsSerialized := make([]byte, fr.Bytes*len(commitmentInfo))
@@ -283,23 +300,6 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 
 		close(chWireValuesBForG2)
 	})
-
-	// sample random r and s
-	var r, s big.Int
-	var _r, _s, _kr fr.Element
-	if _, err := _r.SetRandom(); err != nil {
-		return nil, err
-	}
-	if _, err := _s.SetRandom(); err != nil {
-		return nil, err
-	}
-	_kr.Mul(&_r, &_s).Neg(&_kr)
-
-	_r.BigInt(&r)
-	_s.BigInt(&s)
-
-	// computes r[δ], s[δ], kr[δ]
-	deltas := curve.BatchScalarMultiplicationG1(&pk.G1.Delta, []fr.Element{_r, _s, _kr})
 
 	var bs1, ar curve.G1Jac
 
@@ -401,8 +401,10 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 		return nil
 	}
 
-	// wait for FFT to end
-
+	BS2Done := make(chan error, 1)
+	icicle_cr.RunOnDevice(device2, func(args ...any) {
+		BS2Done <- computeBS2()
+	})
 	// schedule our proof part computations
 	arDone := make(chan error, 1)
 	icicle_cr.RunOnDevice(device1, func(args ...any) {
@@ -413,12 +415,6 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	icicle_cr.RunOnDevice(device3, func(args ...any) {
 		BS1Done <- computeBS1()
 	})
-
-	/*KRSDone := make(chan error, 1)
-	icicle_cr.RunOnDevice(device0, func(args ...any) {
-		KRSDone <- computeKRS()
-	})
-	<-KRSDone*/
 
 	KrsDone := make(chan error, 1)
 	icicle_cr.RunOnDevice(device4, func(args ...any) {
@@ -445,11 +441,6 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	krs.AddAssign(&p1)
 
 	proof.Krs.FromJacobian(&krs)
-
-	BS2Done := make(chan error, 1)
-	icicle_cr.RunOnDevice(device2, func(args ...any) {
-		BS2Done <- computeBS2()
-	})
 	<-BS2Done
 
 	log.Debug().Dur("took", time.Since(start)).Msg("prover done")

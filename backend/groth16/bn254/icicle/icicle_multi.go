@@ -421,5 +421,6 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	})
 	<-freeADone
 	<-freeBDone
+	time.Sleep(2 * time.Second)
 	return proof, nil
 }

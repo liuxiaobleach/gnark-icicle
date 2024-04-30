@@ -51,7 +51,7 @@ func TestLargeCircuitInGpuOnBn254(t *testing.T) {
 	assert.NoError(err)
 
 	for i := 0; i < 10; i++ {
-		innerProof, err := icicle_bn254.Prove(innerCcs.(*cs.R1CS), innerPK.(*icicle_bn254.ProvingKey), innerWitness)
+		innerProof, err := icicle_bn254.ProveOnMulti(innerCcs.(*cs.R1CS), innerPK.(*icicle_bn254.ProvingKey), innerWitness)
 		assert.NoError(err)
 		err = groth16.Verify(innerProof, innerVK, innerPubWitness)
 		assert.NoError(err)

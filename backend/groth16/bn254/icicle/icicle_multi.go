@@ -408,12 +408,18 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	log.Debug().Dur("took", time.Since(start)).Msg("prover done")
 
 	// free device/GPU memory that is not needed for future proofs (scalars/hpoly)
+	freeADone := make(chan error, 1)
 	icicle_cr.RunOnDevice(1, func(args ...any) {
 		wireValuesADevice.Free()
+		freeADone <- nil
 	})
+	freeBDone := make(chan error, 1)
 	icicle_cr.RunOnDevice(0, func(args ...any) {
 		wireValuesBDevice.Free()
 		h.Free()
+		freeBDone <- nil
 	})
+	<-freeADone
+	<-freeBDone
 	return proof, nil
 }

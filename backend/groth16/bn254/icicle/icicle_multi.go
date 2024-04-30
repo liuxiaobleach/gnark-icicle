@@ -505,10 +505,10 @@ func computeHOnDevice(a, b, c []fr.Element, pk *ProvingKey, log zerolog.Logger) 
 	icicle_cr.RunOnDevice(device0, func(args ...any) {
 		computeInttNttOnDevice(a, computeADone)
 	})
-	icicle_cr.RunOnDevice(device1, func(args ...any) {
+	icicle_cr.RunOnDevice(device0, func(args ...any) {
 		computeInttNttOnDevice(b, computeBDone)
 	})
-	icicle_cr.RunOnDevice(device2, func(args ...any) {
+	icicle_cr.RunOnDevice(device0, func(args ...any) {
 		computeInttNttOnDevice(c, computeCDone)
 	})
 

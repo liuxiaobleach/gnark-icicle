@@ -79,12 +79,14 @@ func TestLargeCircuitInGpuOnBls12377(t *testing.T) {
 	}
 	innerWitness, err := frontend.NewWitness(innerAssignment, field)
 	assert.NoError(err)
-	innerProof, err := groth16.Prove(innerCcs, innerPK, innerWitness)
-	assert.NoError(err)
 	innerPubWitness, err := innerWitness.Public()
 	assert.NoError(err)
-	err = groth16.Verify(innerProof, innerVK, innerPubWitness)
-	assert.NoError(err)
+	for i := 0; i < 10; i++ {
+		innerProof, err := groth16.Prove(innerCcs, innerPK, innerWitness)
+		assert.NoError(err)
+		err = groth16.Verify(innerProof, innerVK, innerPubWitness)
+		assert.NoError(err)
+	}
 }
 
 func (c *LargeCircuitCommitment) Define(api frontend.API) error {

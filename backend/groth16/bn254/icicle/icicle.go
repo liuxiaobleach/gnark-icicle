@@ -510,6 +510,7 @@ func computeH(a, b, c []fr.Element, pk *ProvingKey, log zerolog.Logger) icicle_c
 
 	computeInttNttOnDevice := func(scalars []fr.Element, channel chan icicle_core.DeviceSlice) {
 		cfg := icicle_ntt.GetDefaultNttConfig()
+		log.Debug().Msg(fmt.Sprintf("computeInttNttOnDevice: deviceId:%d", cfg.Ctx.GetDeviceId()))
 		scalarsStream, _ := icicle_cr.CreateStream()
 		cfg.Ctx.Stream = &scalarsStream
 		cfg.Ordering = icicle_core.KNR

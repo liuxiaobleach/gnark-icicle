@@ -4,6 +4,8 @@ package icicle
 
 import (
 	"fmt"
+	icicle_vecops "github.com/ingonyama-zk/icicle/v2/wrappers/golang/curves/bn254/vecOps"
+	"github.com/rs/zerolog"
 	"math/big"
 	"math/bits"
 	"time"
@@ -218,14 +220,14 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	// H (witness reduction / FFT part)
 	var h icicle_core.DeviceSlice
 	chHDone := make(chan struct{}, 1)
-	icicle_cr.RunOnDevice(device0, func(args ...any) {
-		h = computeH(solution.A, solution.B, solution.C, pk, log)
+	go func() {
+		h = computeHOnDevice(solution.A, solution.B, solution.C, pk, log)
 
 		solution.A = nil
 		solution.B = nil
 		solution.C = nil
 		chHDone <- struct{}{}
-	})
+	}()
 
 	// we need to copy and filter the wireValues for each multi exp
 	// as pk.G1.A, pk.G1.B and pk.G2.B may have (a significant) number of point at infinity
@@ -458,4 +460,78 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	<-freeBForG2Done
 	<-freeHDone
 	return proof, nil
+}
+
+func computeHOnDevice(a, b, c []fr.Element, pk *ProvingKey, log zerolog.Logger) icicle_core.DeviceSlice {
+	// H part of Krs
+	// Compute H (hz=ab-c, where z=-2 on ker X^n+1 (z(x)=x^n-1))
+	// 	1 - _a = ifft(a), _b = ifft(b), _c = ifft(c)
+	// 	2 - ca = fft_coset(_a), ba = fft_coset(_b), cc = fft_coset(_c)
+	// 	3 - h = ifft_coset(ca o cb - cc)
+
+	n := len(a)
+
+	// add padding to ensure input length is domain cardinality
+	padding := make([]fr.Element, int(pk.Domain.Cardinality)-n)
+	a = append(a, padding...)
+	b = append(b, padding...)
+	c = append(c, padding...)
+	n = len(a)
+
+	computeADone := make(chan icicle_core.DeviceSlice, 1)
+	computeBDone := make(chan icicle_core.DeviceSlice, 1)
+	computeCDone := make(chan icicle_core.DeviceSlice, 1)
+
+	computeInttNttOnDevice := func(scalars []fr.Element, channel chan icicle_core.DeviceSlice) {
+		cfg := icicle_ntt.GetDefaultNttConfig()
+		log.Debug().Msg(fmt.Sprintf("computeInttNttOnDevice: deviceId:%d", cfg.Ctx.GetDeviceId()))
+		scalarsStream, _ := icicle_cr.CreateStream()
+		cfg.Ctx.Stream = &scalarsStream
+		cfg.Ordering = icicle_core.KNR
+		cfg.IsAsync = true
+		scalarsHost := icicle_core.HostSliceFromElements(scalars)
+		var scalarsDevice icicle_core.DeviceSlice
+		scalarsHost.CopyToDeviceAsync(&scalarsDevice, scalarsStream, true)
+		start := time.Now()
+		icicle_ntt.Ntt(scalarsDevice, icicle_core.KInverse, &cfg, scalarsDevice)
+		cfg.Ordering = icicle_core.KRN
+		cfg.CosetGen = pk.CosetGenerator
+		icicle_ntt.Ntt(scalarsDevice, icicle_core.KForward, &cfg, scalarsDevice)
+		icicle_cr.SynchronizeStream(&scalarsStream)
+		log.Debug().Dur("took", time.Since(start)).Msg("computeH: NTT + INTT")
+		channel <- scalarsDevice
+	}
+
+	icicle_cr.RunOnDevice(device0, func(args ...any) {
+		computeInttNttOnDevice(a, computeADone)
+	})
+	icicle_cr.RunOnDevice(device1, func(args ...any) {
+		computeInttNttOnDevice(b, computeBDone)
+	})
+	icicle_cr.RunOnDevice(device2, func(args ...any) {
+		computeInttNttOnDevice(c, computeCDone)
+	})
+
+	aDevice := <-computeADone
+	bDevice := <-computeBDone
+	cDevice := <-computeCDone
+
+	vecCfg := icicle_core.DefaultVecOpsConfig()
+	start := time.Now()
+	icicle_bn254.FromMontgomery(&aDevice)
+	icicle_vecops.VecOp(aDevice, bDevice, aDevice, vecCfg, icicle_core.Mul)
+	icicle_vecops.VecOp(aDevice, cDevice, aDevice, vecCfg, icicle_core.Sub)
+	icicle_vecops.VecOp(aDevice, pk.DenDevice, aDevice, vecCfg, icicle_core.Mul)
+	log.Debug().Dur("took", time.Since(start)).Msg("computeH: vecOps")
+
+	defer bDevice.Free()
+	defer cDevice.Free()
+
+	cfg := icicle_ntt.GetDefaultNttConfig()
+	cfg.CosetGen = pk.CosetGenerator
+	cfg.Ordering = icicle_core.KNR
+	start = time.Now()
+	icicle_ntt.Ntt(aDevice, icicle_core.KInverse, &cfg, aDevice)
+	log.Debug().Dur("took", time.Since(start)).Msg("computeH: INTT final")
+	return aDevice
 }

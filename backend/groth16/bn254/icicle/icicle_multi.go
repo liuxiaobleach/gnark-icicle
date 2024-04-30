@@ -82,7 +82,7 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 	/*************************  Start G1 Device Setup  ***************************/
 	/*************************     A      ***************************/
 	copyADone := make(chan bool, 1)
-	icicle_cr.RunOnDevice(0, func(args ...any) {
+	icicle_cr.RunOnDevice(1, func(args ...any) {
 		g1AHost := (icicle_core.HostSlice[curve.G1Affine])(pk.G1.A)
 		g1AHost.CopyToDevice(&pk.G1Device.A, true)
 		copyADone <- true
@@ -377,7 +377,7 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 
 	// schedule our proof part computations
 	arDone := make(chan error, 1)
-	icicle_cr.RunOnDevice(0, func(args ...any) {
+	icicle_cr.RunOnDevice(1, func(args ...any) {
 		arDone <- computeAR1()
 	})
 	<-arDone

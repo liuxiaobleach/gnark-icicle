@@ -354,6 +354,7 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 		_wireValues := filterHeap(wireValues[r1cs.GetNbPublicVariables():], r1cs.GetNbPublicVariables(), internal.ConcatAll(toRemove...))
 		_wireValuesHost := (icicle_core.HostSlice[fr.Element])(_wireValues)
 		resKrs := make(icicle_core.HostSlice[icicle_bn254.Projective], 1)
+		cfg.AreScalarsMontgomeryForm = true
 		start := time.Now()
 		icicle_msm.Msm(_wireValuesHost, pk.G1Device.K, &cfg, resKrs)
 		log.Debug().Dur("took", time.Since(start)).Msg("MSM Krs")

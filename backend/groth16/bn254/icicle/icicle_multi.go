@@ -84,7 +84,7 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 		copy(pk.CosetGenerator[:], limbs[:fr.Limbs*2])
 		var rouIcicle icicle_bn254.ScalarField
 		rouIcicle.FromLimbs(limbs)
-		e := icicle_ntt.InitDomain(rouIcicle, ctx, false)
+		e := icicle_ntt.InitDomain(rouIcicle, ctx, true)
 		if e.IcicleErrorCode != icicle_core.IcicleSuccess {
 			panic("Couldn't initialize domain") // TODO
 		}
@@ -98,6 +98,7 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 	icicle_cr.RunOnDevice(device1, func(args ...any) {
 		g1AHost := (icicle_core.HostSlice[curve.G1Affine])(pk.G1.A)
 		g1AHost.CopyToDevice(&pk.G1Device.A, true)
+		icicle_bn254.AffineFromMontgomery(&pk.G1Device.A)
 		copyADone <- true
 	})
 	/*************************     B      ***************************/
@@ -105,6 +106,7 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 	icicle_cr.RunOnDevice(device3, func(args ...any) {
 		g1BHost := (icicle_core.HostSlice[curve.G1Affine])(pk.G1.B)
 		g1BHost.CopyToDevice(&pk.G1Device.B, true)
+		icicle_bn254.AffineFromMontgomery(&pk.G1Device.B)
 		copyBDone <- true
 	})
 	/*************************     K      ***************************/
@@ -112,6 +114,7 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 	icicle_cr.RunOnDevice(device4, func(args ...any) {
 		g1KHost := (icicle_core.HostSlice[curve.G1Affine])(pk.G1.K)
 		g1KHost.CopyToDevice(&pk.G1Device.K, true)
+		icicle_bn254.AffineFromMontgomery(&pk.G1Device.K)
 		copyKDone <- true
 	})
 	/*************************     Z      ***************************/
@@ -119,6 +122,7 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 	icicle_cr.RunOnDevice(device0, func(args ...any) {
 		g1ZHost := (icicle_core.HostSlice[curve.G1Affine])(pk.G1.Z)
 		g1ZHost.CopyToDevice(&pk.G1Device.Z, true)
+		icicle_bn254.AffineFromMontgomery(&pk.G1Device.Z)
 		copyZDone <- true
 	})
 	/*************************  End G1 Device Setup  ***************************/
@@ -134,6 +138,7 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 	icicle_cr.RunOnDevice(device2, func(args ...any) {
 		g2BHost := (icicle_core.HostSlice[curve.G2Affine])(pk.G2.B)
 		g2BHost.CopyToDevice(&pk.G2Device.B, true)
+		icicle_g2.G2AffineFromMontgomery(&pk.G2Device.B)
 		copyG2BDone <- true
 	})
 
@@ -264,6 +269,7 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 		// Copy scalars to the device and retain ptr to them
 		wireValuesAHost := (icicle_core.HostSlice[fr.Element])(wireValuesA)
 		wireValuesAHost.CopyToDevice(&wireValuesADevice, true)
+		icicle_bn254.FromMontgomery(&wireValuesADevice)
 
 		close(chWireValuesA)
 	})
@@ -280,6 +286,7 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 		// Copy scalars to the device and retain ptr to them
 		wireValuesBHost := (icicle_core.HostSlice[fr.Element])(wireValuesB)
 		wireValuesBHost.CopyToDevice(&wireValuesBDevice, true)
+		icicle_bn254.FromMontgomery(&wireValuesBDevice)
 
 		close(chWireValuesB)
 	})
@@ -297,6 +304,7 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 		// Copy scalars to the device and retain ptr to them
 		wireValuesBHost := (icicle_core.HostSlice[fr.Element])(wireValuesB)
 		wireValuesBHost.CopyToDevice(&wireValuesBDeviceForG2, true)
+		icicle_bn254.FromMontgomery(&wireValuesBDeviceForG2)
 
 		close(chWireValuesBForG2)
 	})
@@ -307,8 +315,6 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 		<-chWireValuesB
 
 		cfg := icicle_msm.GetDefaultMSMConfig()
-		cfg.ArePointsMontgomeryForm = true
-		cfg.AreScalarsMontgomeryForm = true
 		res := make(icicle_core.HostSlice[icicle_bn254.Projective], 1)
 		start := time.Now()
 		icicle_msm.Msm(wireValuesBDevice, pk.G1Device.B, &cfg, res)
@@ -325,8 +331,6 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 		<-chWireValuesA
 
 		cfg := icicle_msm.GetDefaultMSMConfig()
-		cfg.ArePointsMontgomeryForm = true
-		cfg.AreScalarsMontgomeryForm = true
 		res := make(icicle_core.HostSlice[icicle_bn254.Projective], 1)
 		start := time.Now()
 		icicle_msm.Msm(wireValuesADevice, pk.G1Device.A, &cfg, res)
@@ -343,8 +347,6 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 	var krs, p1 curve.G1Jac
 	computeKrs := func() error {
 		cfg := icicle_msm.GetDefaultMSMConfig()
-		cfg.ArePointsMontgomeryForm = true
-		cfg.AreScalarsMontgomeryForm = true
 		// filter the wire values if needed
 		// TODO Perf @Tabaie worst memory allocation offender
 		toRemove := commitmentInfo.GetPrivateCommitted()
@@ -366,8 +368,6 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 		sizeH := int(pk.Domain.Cardinality - 1)
 
 		cfg := icicle_msm.GetDefaultMSMConfig()
-		cfg.ArePointsMontgomeryForm = true
-		cfg.AreScalarsMontgomeryForm = true
 		resKrs2 := make(icicle_core.HostSlice[icicle_bn254.Projective], 1)
 		start := time.Now()
 		icicle_msm.Msm(h.RangeTo(sizeH, false), pk.G1Device.Z, &cfg, resKrs2)
@@ -384,8 +384,6 @@ func ProveOnMulti(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, op
 		<-chWireValuesBForG2
 
 		cfg := icicle_g2.G2GetDefaultMSMConfig()
-		cfg.ArePointsMontgomeryForm = true
-		cfg.AreScalarsMontgomeryForm = true
 		res := make(icicle_core.HostSlice[icicle_g2.G2Projective], 1)
 		start := time.Now()
 		icicle_g2.G2Msm(wireValuesBDeviceForG2, pk.G2Device.B, &cfg, res)
@@ -498,14 +496,14 @@ func computeHOnDevice(a, b, c []fr.Element, pk *ProvingKey, log zerolog.Logger) 
 		log.Debug().Msg(fmt.Sprintf("computeInttNttOnDevice: deviceId:%d", cfg.Ctx.GetDeviceId()))
 		scalarsStream, _ := icicle_cr.CreateStream()
 		cfg.Ctx.Stream = &scalarsStream
-		cfg.Ordering = icicle_core.KNR
+		cfg.Ordering = icicle_core.KNM
 		cfg.IsAsync = true
 		scalarsHost := icicle_core.HostSliceFromElements(scalars)
 		var scalarsDevice icicle_core.DeviceSlice
 		scalarsHost.CopyToDeviceAsync(&scalarsDevice, scalarsStream, true)
 		start := time.Now()
 		icicle_ntt.Ntt(scalarsDevice, icicle_core.KInverse, &cfg, scalarsDevice)
-		cfg.Ordering = icicle_core.KRN
+		cfg.Ordering = icicle_core.KMN
 		cfg.CosetGen = pk.CosetGenerator
 		icicle_ntt.Ntt(scalarsDevice, icicle_core.KForward, &cfg, scalarsDevice)
 		icicle_cr.SynchronizeStream(&scalarsStream)
@@ -544,5 +542,6 @@ func computeHOnDevice(a, b, c []fr.Element, pk *ProvingKey, log zerolog.Logger) 
 	start = time.Now()
 	icicle_ntt.Ntt(aDevice, icicle_core.KInverse, &cfg, aDevice)
 	log.Debug().Dur("took", time.Since(start)).Msg("computeH: INTT final")
+	icicle_bn254.FromMontgomery(&aDevice)
 	return aDevice
 }

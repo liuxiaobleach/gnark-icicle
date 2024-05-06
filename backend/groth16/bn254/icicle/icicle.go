@@ -381,6 +381,7 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 		if isProfile {
 			log.Debug().Dur("took", time.Since(start)).Msg("MSM Ar1")
 		}
+		wireValuesADevice.Free()
 		ar = g1ProjectiveToG1Jac(res[0])
 
 		ar.AddMixed(&pk.G1.Alpha)
@@ -401,6 +402,7 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 		if isProfile {
 			log.Debug().Dur("took", time.Since(start)).Msg("MSM Krs2")
 		}
+		h.Free()
 		krs2 = g1ProjectiveToG1Jac(resKrs2[0])
 
 		// filter the wire values if needed
@@ -410,6 +412,7 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 
 		<-chWireValues
 		icicle_msm.Msm(wireValuesDevice, pk.G1Device.K, &cfg, resKrs)
+		wireValuesDevice.Free()
 		if isProfile {
 			log.Debug().Dur("took", time.Since(start)).Msg("MSM Krs")
 		}
@@ -464,10 +467,11 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 	if err := computeBS1(); err != nil {
 		return nil, err
 	}
-	if err := computeKRS(); err != nil {
+	if err := computeBS2(); err != nil {
 		return nil, err
 	}
-	if err := computeBS2(); err != nil {
+	wireValuesBDevice.Free()
+	if err := computeKRS(); err != nil {
 		return nil, err
 	}
 
@@ -479,10 +483,10 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 		wireValuesBDevice.Free()
 		h.Free()
 	}()*/
-	wireValuesADevice.Free()
-	wireValuesBDevice.Free()
-	wireValuesDevice.Free()
-	h.Free()
+	//wireValuesADevice.Free()
+	//wireValuesBDevice.Free()
+	//wireValuesDevice.Free()
+	//h.Free()
 
 	return proof, nil
 }

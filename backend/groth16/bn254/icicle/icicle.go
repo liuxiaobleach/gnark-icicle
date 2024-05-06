@@ -465,11 +465,14 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 	log.Debug().Dur("took", time.Since(start)).Msg("prover done")
 
 	// free device/GPU memory that is not needed for future proofs (scalars/hpoly)
-	go func() {
+	/*go func() {
 		wireValuesADevice.Free()
 		wireValuesBDevice.Free()
-		// h.Free()
-	}()
+		h.Free()
+	}()*/
+	wireValuesADevice.Free()
+	wireValuesBDevice.Free()
+	h.Free()
 
 	return proof, nil
 }

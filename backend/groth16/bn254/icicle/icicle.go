@@ -81,7 +81,7 @@ func (pk *ProvingKey) setupDevicePointers() error {
 	copy(pk.CosetGenerator[:], limbs[:fr.Limbs*2])
 	var rouIcicle icicle_bn254.ScalarField
 	rouIcicle.FromLimbs(limbs)
-	e := icicle_ntt.InitDomain(rouIcicle, ctx, true)
+	e := icicle_ntt.InitDomain(rouIcicle, ctx, false) // set false to save mem
 	if e.IcicleErrorCode != icicle_core.IcicleSuccess {
 		panic("Couldn't initialize domain") // TODO
 	}
@@ -284,8 +284,8 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 
 	// we need to copy and filter the wireValues for each multi exp
 	// as pk.G1.A, pk.G1.B and pk.G2.B may have (a significant) number of point at infinity
-	var wireValuesADevice, wireValuesBDevice icicle_core.DeviceSlice
-	chWireValuesA, chWireValuesB := make(chan struct{}, 1), make(chan struct{}, 1)
+	var wireValuesDevice, wireValuesADevice, wireValuesBDevice icicle_core.DeviceSlice
+	chWireValues, chWireValuesA, chWireValuesB := make(chan struct{}, 1), make(chan struct{}, 1), make(chan struct{}, 1)
 
 	go func() {
 		wireValuesA := make([]fr.Element, len(wireValues)-int(pk.NbInfinityA))
@@ -320,6 +320,18 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 		icicle_bn254.FromMontgomery(&wireValuesBDevice)
 
 		close(chWireValuesB)
+	}()
+
+	go func() {
+		toRemove := commitmentInfo.GetPrivateCommitted()
+		toRemove = append(toRemove, commitmentInfo.CommitmentIndexes())
+		_wireValues := filterHeap(wireValues[r1cs.GetNbPublicVariables():], r1cs.GetNbPublicVariables(), internal.ConcatAll(toRemove...))
+		_wireValuesHost := (icicle_core.HostSlice[fr.Element])(_wireValues)
+
+		_wireValuesHost.CopyToDevice(&wireValuesDevice, true)
+		icicle_bn254.FromMontgomery(&wireValuesDevice)
+
+		close(chWireValues)
 	}()
 
 	// sample random r and s
@@ -393,14 +405,11 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 
 		// filter the wire values if needed
 		// TODO Perf @Tabaie worst memory allocation offender
-		toRemove := commitmentInfo.GetPrivateCommitted()
-		toRemove = append(toRemove, commitmentInfo.CommitmentIndexes())
-		_wireValues := filterHeap(wireValues[r1cs.GetNbPublicVariables():], r1cs.GetNbPublicVariables(), internal.ConcatAll(toRemove...))
-		_wireValuesHost := (icicle_core.HostSlice[fr.Element])(_wireValues)
 		resKrs := make(icicle_core.HostSlice[icicle_bn254.Projective], 1)
-		cfg.AreScalarsMontgomeryForm = true
 		start = time.Now()
-		icicle_msm.Msm(_wireValuesHost, pk.G1Device.K, &cfg, resKrs)
+
+		<-chWireValues
+		icicle_msm.Msm(wireValuesDevice, pk.G1Device.K, &cfg, resKrs)
 		if isProfile {
 			log.Debug().Dur("took", time.Since(start)).Msg("MSM Krs")
 		}
@@ -472,6 +481,7 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 	}()*/
 	wireValuesADevice.Free()
 	wireValuesBDevice.Free()
+	wireValuesDevice.Free()
 	h.Free()
 
 	return proof, nil

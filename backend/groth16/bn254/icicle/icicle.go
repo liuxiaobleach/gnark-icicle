@@ -409,7 +409,6 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 		icicle_bn254.FromMontgomery(&wireValuesDevice)
 
 		resKrs := make(icicle_core.HostSlice[icicle_bn254.Projective], 1)
-		cfg.AreScalarsMontgomeryForm = true
 		start = time.Now()
 		icicle_msm.Msm(wireValuesDevice, pk.G1Device.K, &cfg, resKrs)
 		if isProfile {

@@ -4,6 +4,7 @@ package icicle
 
 import (
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"math/big"
 	"math/bits"
 	"os"
@@ -93,7 +94,9 @@ func (pk *ProvingKey) setupDevicePointers() error {
 	go func() {
 		g1AHost := (icicle_core.HostSlice[curve.G1Affine])(pk.G1.A)
 		g1AHost.CopyToDevice(&pk.G1Device.A, true)
+		log.Debug().Msg(fmt.Sprintf("pk.G1Device.A.Len() before: %d", pk.G1Device.A.Len()))
 		icicle_bn254.AffineFromMontgomery(&pk.G1Device.A)
+		log.Debug().Msg(fmt.Sprintf("pk.G1Device.A.Len() after: %d", pk.G1Device.A.Len()))
 		copyADone <- true
 	}()
 	/*************************     B      ***************************/
@@ -131,7 +134,9 @@ func (pk *ProvingKey) setupDevicePointers() error {
 	go func() {
 		g2BHost := (icicle_core.HostSlice[curve.G2Affine])(pk.G2.B)
 		g2BHost.CopyToDevice(&pk.G2Device.B, true)
+		log.Debug().Msg(fmt.Sprintf("pk.G2Device.B.Len() before: %d", pk.G2Device.B.Len()))
 		icicle_g2.G2AffineFromMontgomery(&pk.G2Device.B)
+		log.Debug().Msg(fmt.Sprintf("pk.G2Device.B.Len() before: %d", pk.G2Device.B.Len()))
 		copyG2BDone <- true
 	}()
 
@@ -396,6 +401,7 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 		toRemove := commitmentInfo.GetPrivateCommitted()
 		toRemove = append(toRemove, commitmentInfo.CommitmentIndexes())
 		_wireValues := filterHeap(wireValues[r1cs.GetNbPublicVariables():], r1cs.GetNbPublicVariables(), internal.ConcatAll(toRemove...))
+		log.Debug().Msg(fmt.Sprintf("_wireValues fr len: %d", len(_wireValues)))
 		_wireValuesHost := (icicle_core.HostSlice[fr.Element])(_wireValues)
 		resKrs := make(icicle_core.HostSlice[icicle_bn254.Projective], 1)
 		cfg.AreScalarsMontgomeryForm = true

@@ -392,6 +392,8 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 		resKrs2 := make(icicle_core.HostSlice[icicle_bn254.Projective], 1)
 		start := time.Now()
 		icicle_msm.Msm(h.RangeTo(sizeH, false), pk.G1Device.Z, &cfg, resKrs2)
+		h.Free()
+		log.Debug().Msg("end h msm")
 		if isProfile {
 			log.Debug().Dur("took", time.Since(start)).Msg("MSM Krs2")
 		}
@@ -462,7 +464,6 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 	if err := computeKRS(); err != nil {
 		return nil, err
 	}
-	h.Free()
 	// schedule our proof part computations
 	if err := computeAR1(); err != nil {
 		return nil, err

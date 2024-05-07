@@ -474,9 +474,9 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 		wireValuesBDevice.Free()
 		h.Free()
 	}()*/
-	wireValuesADevice.Free()
-	wireValuesBDevice.Free()
-	h.Free()
+	//wireValuesADevice.Free()
+	//wireValuesBDevice.Free()
+	//h.Free()
 
 	return proof, nil
 }

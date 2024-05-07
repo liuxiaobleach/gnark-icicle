@@ -348,7 +348,7 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 
 	computeBS1 := func() error {
 		<-chWireValuesB
-
+		log.Debug().Msg("start computeBS1")
 		cfg := icicle_msm.GetDefaultMSMConfig()
 		res := make(icicle_core.HostSlice[icicle_bn254.Projective], 1)
 		start := time.Now()
@@ -366,7 +366,7 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 
 	computeAR1 := func() error {
 		<-chWireValuesA
-
+		log.Debug().Msg("start computeAR1")
 		cfg := icicle_msm.GetDefaultMSMConfig()
 		res := make(icicle_core.HostSlice[icicle_bn254.Projective], 1)
 		start := time.Now()
@@ -384,6 +384,7 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 	}
 
 	computeKRS := func() error {
+		log.Debug().Msg("start computeKRS")
 		var krs, krs2, p1 curve.G1Jac
 		sizeH := int(pk.Domain.Cardinality - 1)
 
@@ -437,7 +438,7 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 		var Bs, deltaS curve.G2Jac
 
 		<-chWireValuesB
-
+		log.Debug().Msg("start computeBS2")
 		cfg := icicle_g2.G2GetDefaultMSMConfig()
 		res := make(icicle_core.HostSlice[icicle_g2.G2Projective], 1)
 		start := time.Now()
@@ -458,7 +459,10 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 
 	// wait for FFT to end
 	<-chHDone
-
+	if err := computeKRS(); err != nil {
+		return nil, err
+	}
+	h.Free()
 	// schedule our proof part computations
 	if err := computeAR1(); err != nil {
 		return nil, err
@@ -471,10 +475,6 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 		return nil, err
 	}
 	wireValuesBDevice.Free()
-	if err := computeKRS(); err != nil {
-		return nil, err
-	}
-	h.Free()
 
 	log.Debug().Dur("took", time.Since(start)).Msg("prover done")
 

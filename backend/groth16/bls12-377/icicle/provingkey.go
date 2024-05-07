@@ -1,7 +1,7 @@
 package icicle
 
 import (
-	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
+	"github.com/consensys/gnark-crypto/ecc/bls12-377/fr"
 	groth16_bls12377 "github.com/consensys/gnark/backend/groth16/bls12-377"
 	cs "github.com/consensys/gnark/constraint/bls12-377"
 	icicle_core "github.com/ingonyama-zk/icicle/v2/wrappers/golang/core"

@@ -84,7 +84,7 @@ func (pk *ProvingKey) setupDevicePointersOnMulti() error {
 		copy(pk.CosetGenerator[:], limbs[:fr.Limbs*2])
 		var rouIcicle icicle_bn254.ScalarField
 		rouIcicle.FromLimbs(limbs)
-		e := icicle_ntt.InitDomain(rouIcicle, ctx, true)
+		e := icicle_ntt.InitDomain(rouIcicle, ctx, false)
 		if e.IcicleErrorCode != icicle_core.IcicleSuccess {
 			panic("Couldn't initialize domain") // TODO
 		}
